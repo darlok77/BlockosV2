@@ -1,8 +1,10 @@
-import type { Cell } from "../data/mapLayout";
+import type { Cell } from "../data";
 import exhaustiveCheck from "./exhaustiveGuard";
 
+export type BlockType = "attack" | "defense" | "destroy" | "bridge";
+
 export interface BlockToPlace {
-	type: "attack" | "defense" | "destroy";
+	type: BlockType;
 	nbBlocks: number;
 }
 
@@ -67,7 +69,7 @@ export const calculateBlocksToPlace = (diceUsed: number[]): BlockToPlace[] => {
 export const getAlignedPositions = (
 	board: Cell[][],
 	startPosition: { x: number; y: number },
-	blockType: "attack" | "defense" | "destroy",
+	blockType: BlockType,
 	currentPlayer: number,
 	nbBlocksRemaining: number = 1,
 ): { x: number; y: number }[] => {
@@ -112,7 +114,7 @@ export const getAlignedPositions = (
 		}
 
 		// Vérifier les règles selon le type de bloc
-		if (canPlaceBlockOnCell(cell, blockType, currentPlayer, board, nx, ny)) {
+		if (canPlaceBlockOnCell(cell, blockType, currentPlayer)) {
 			// Cas spécial : pour les attaques sur une base, toujours permettre même sans places consécutives
 			if (blockType === "attack" && cell.type === "base") {
 				positions.push({ x: nx, y: ny });
@@ -164,10 +166,7 @@ export const getAlignedPositions = (
 						!canPlaceBlockOnCell(
 							checkCell,
 							blockType,
-							currentPlayer,
-							board,
-							checkX,
-							checkY,
+							currentPlayer
 						)
 					) {
 						canPlaceAll = false;
@@ -195,7 +194,7 @@ export const getNextPositionInDirection = (
 	board: Cell[][],
 	currentPosition: { x: number; y: number },
 	direction: { dx: number; dy: number },
-	blockType: "attack" | "defense" | "destroy",
+	blockType: BlockType,
 	currentPlayer: number,
 	nbBlocksRemaining: number = 1,
 ): { x: number; y: number } | null => {
@@ -205,13 +204,16 @@ export const getNextPositionInDirection = (
 	const nextX = currentPosition.x + direction.dx;
 	const nextY = currentPosition.y + direction.dy;
 
-	// Vérifier les limites du board
-	if (nextX < 0 || nextX >= cols || nextY < 0 || nextY >= rows) return null;
+	const isOutOfBoundsX = nextX < 0 || nextX >= cols;
+	const isOutOfBoundsY = nextY < 0 || nextY >= rows;
+	const isOutOfBounds = isOutOfBoundsX || isOutOfBoundsY;
+	if (isOutOfBounds) return null;
 
 	const cell = board[nextX][nextY];
 
-	// Cas spécial : si c'est un bloc détruit (owner === -1) ET qu'il reste 1 bloc ET que la position suivante est une base adverse
-	if (cell.owner === -1 && nbBlocksRemaining === 1) {
+	const isDestroyedBlock = cell.owner === -1
+	const isLastBlock = nbBlocksRemaining === 1;
+	if (isDestroyedBlock && isLastBlock) {
 		const beyondX = nextX + direction.dx;
 		const beyondY = nextY + direction.dy;
 
@@ -222,38 +224,37 @@ export const getNextPositionInDirection = (
 				beyondCell.owner > 0 &&
 				beyondCell.owner !== currentPlayer
 			) {
-				// On peut sauter le bloc détruit et attaquer la base
 				return { x: beyondX, y: beyondY };
 			}
 		}
 	}
-
-	// Vérifier les règles selon le type de bloc
 	if (
-		canPlaceBlockOnCell(cell, blockType, currentPlayer, board, nextX, nextY)
+		canPlaceBlockOnCell(cell, blockType, currentPlayer)
 	) {
-		// Si c'est le dernier bloc, on peut placer ici
-		if (nbBlocksRemaining === 1) {
+		if (isLastBlock) {
 			return { x: nextX, y: nextY };
 		}
 
-		// Sinon, vérifier qu'on peut placer tous les blocs restants dans la direction
+		//vérifie qu'on peut placer tous les blocs restants dans la direction
 		let canPlaceAll = true;
 		for (let i = 1; i < nbBlocksRemaining; i++) {
 			const checkX = nextX + direction.dx * i;
 			const checkY = nextY + direction.dy * i;
 
 			// Vérifier les limites
-			if (checkX < 0 || checkX >= cols || checkY < 0 || checkY >= rows) {
+			const isCheckOutOfBoundsX = checkX < 0 || checkX >= cols;
+			const isCheckOutOfBoundsY = checkY < 0 || checkY >= rows;
+			const isCheckOutOfBounds = isCheckOutOfBoundsX || isCheckOutOfBoundsY;
+			if (isCheckOutOfBounds) {
 				canPlaceAll = false;
 				break;
 			}
 
 			const checkCell = board[checkX][checkY];
 
-			// On peut sauter les blocs détruits si après il y a une base adverse
-			if (checkCell.owner === -1 && i === nbBlocksRemaining - 1) {
-				// C'est le dernier bloc, vérifier si après il y a une base adverse
+			const isDestroyedBlock = checkCell.owner === -1;
+			const isLastBlock = i === nbBlocksRemaining - 1;
+			if (isDestroyedBlock && isLastBlock) {
 				const beyondX = checkX + direction.dx;
 				const beyondY = checkY + direction.dy;
 				if (beyondX >= 0 && beyondX < cols && beyondY >= 0 && beyondY < rows) {
@@ -263,7 +264,6 @@ export const getNextPositionInDirection = (
 						beyondCell.owner > 0 &&
 						beyondCell.owner !== currentPlayer
 					) {
-						// OK, on peut continuer
 						break;
 					}
 				}
@@ -275,10 +275,7 @@ export const getNextPositionInDirection = (
 				!canPlaceBlockOnCell(
 					checkCell,
 					blockType,
-					currentPlayer,
-					board,
-					checkX,
-					checkY,
+					currentPlayer
 				)
 			) {
 				canPlaceAll = false;
@@ -295,41 +292,53 @@ export const getNextPositionInDirection = (
 };
 
 const isCellValidForDestroy = (cell: Cell, currentPlayer: number): boolean => {
-	return (
-		cell.owner > 0 && // cellule possédée par un joueur
-		cell.owner !== currentPlayer && // cellule possédée par un autre joueur
-		cell.territory !== currentPlayer && // cellule dans le territoire d'un autre joueur
-		cell.type === "land" // cellule dans un terrain
-	);
+	const isWater = cell.type === "water";
+	const isOwnerEnemy = cell.owner > 0 && cell.owner !== currentPlayer;
+	const isBaseBlock = cell.type === "base";
+	const isTerritoryNotOwnedByCurrentPlayer = cell.territory !== currentPlayer;
+	if (isWater && isOwnerEnemy && isBaseBlock) {
+		return true;
+	}
+	return isOwnerEnemy && isTerritoryNotOwnedByCurrentPlayer && !isBaseBlock;
 };
 const isCellValidForAttack = (
 	cell: Cell,
-	currentPlayer: number,
-	// eslint-disable-next-line @typescript-eslint/no-unused-vars
-	_board: Cell[][],
-	// eslint-disable-next-line @typescript-eslint/no-unused-vars
-	_x?: number,
-	// eslint-disable-next-line @typescript-eslint/no-unused-vars
-	_y?: number,
+	currentPlayer: number
 ): boolean => {
-	// Si c'est une base, elle doit appartenir à un adversaire
-	if (cell.type === "base") {
-		return cell.owner > 0 && cell.owner !== currentPlayer;
+	const isWater = cell.type === "water";
+	const isBase = cell.type === "base";
+	const isOwnerEnemy = cell.owner > 0 && cell.owner !== currentPlayer;
+	const isDestroyed = cell.owner === -1;
+	const isTerritoryOwnedByCurrentPlayer = cell.territory === currentPlayer;
+	const isZoneOwnedByCurrentPlayer = cell.zone === currentPlayer;
+	const isOwnerFree = cell.owner === 0;
+	if (isWater) return false;
+	if (isBase) {
+		return isOwnerEnemy;
 	}
-
-	// Les blocs détruits ne peuvent PAS recevoir un bloc d'attaque
-	if (cell.owner === -1) {
+	if (isDestroyed) {
 		return false;
 	}
-
-	// Sinon, cellule libre (owner === 0) dans la zone d'un autre joueur
-	return cell.owner === 0 && cell.zone !== currentPlayer;
+	if (!isOwnerFree) {
+		return false;
+	}
+	if (isTerritoryOwnedByCurrentPlayer) {
+		return isZoneOwnedByCurrentPlayer;
+	}
+	return true
 };
 const isCellValidForDefense = (cell: Cell, currentPlayer: number): boolean => {
-	return (
-		cell.owner === 0 && // cellule libre
-		(cell.territory === currentPlayer || cell.zone === currentPlayer) // cellule dans le territoire ou la zone du joueur
-	);
+	const isWater = cell.type === "water";
+	const isOwnerFree = cell.owner === 0;
+	const isTerritoryOwnedByCurrentPlayer = cell.territory === currentPlayer;
+	if (isWater) return false;
+	return isOwnerFree && isTerritoryOwnedByCurrentPlayer;
+};
+
+const isCellValidForBridge = (cell: Cell): boolean => {
+	const isWater = cell.type === "water";
+	const isOwnerFree = cell.owner === 0;
+	return (isOwnerFree && isWater);
 };
 
 /**
@@ -337,20 +346,18 @@ const isCellValidForDefense = (cell: Cell, currentPlayer: number): boolean => {
  */
 export const canPlaceBlockOnCell = (
 	cell: Cell,
-	blockType: "attack" | "defense" | "destroy",
-	currentPlayer: number,
-	board?: Cell[][],
-	x?: number,
-	y?: number,
+	blockType: BlockType,
+	currentPlayer: number
 ): boolean => {
 	switch (blockType) {
 		case "defense":
 			return isCellValidForDefense(cell, currentPlayer);
 		case "attack":
-			return isCellValidForAttack(cell, currentPlayer, board || [], x, y);
+			return isCellValidForAttack(cell, currentPlayer);
 		case "destroy":
-			// Blocs de destruction : cellule possédée par un autre joueur ET territory !== currentPlayer
 			return isCellValidForDestroy(cell, currentPlayer);
+		case "bridge":
+			return isCellValidForBridge(cell);
 		default:
 			exhaustiveCheck(blockType);
 	}
@@ -359,7 +366,7 @@ export const canPlaceBlockOnCell = (
 export const getPlayablePositions = (
 	board: Cell[][],
 	currentPlayer: number,
-	blockType?: "attack" | "defense" | "destroy",
+	blockType?: BlockType,
 	nbBlocksRemaining?: number,
 ) => {
 	const positions: { x: number; y: number }[] = [];
@@ -372,7 +379,7 @@ export const getPlayablePositions = (
 		for (let x = 0; x < cols; x++) {
 			for (let y = 0; y < rows; y++) {
 				const cell = board[x][y];
-				if (canPlaceBlockOnCell(cell, blockType, currentPlayer, board, x, y)) {
+				if (canPlaceBlockOnCell(cell, blockType, currentPlayer)) {
 					positions.push({ x, y });
 				}
 			}
@@ -380,11 +387,7 @@ export const getPlayablePositions = (
 		return positions;
 	}
 
-	// Pour les autres types de blocs, on cherche seulement les positions adjacentes
-	// Optimisation : parcourir seulement les cellules adjacentes aux cellules possédées
 	const ownedCells: { x: number; y: number }[] = [];
-
-	// D'abord, collecter toutes les cellules possédées par le joueur
 	for (let x = 0; x < cols; x++) {
 		for (let y = 0; y < rows; y++) {
 			if (board[x][y].owner === currentPlayer) {
@@ -395,9 +398,7 @@ export const getPlayablePositions = (
 
 	// Ensuite, vérifier seulement les cellules adjacentes aux cellules possédées
 	const checkedPositions = new Set<string>();
-
 	for (const { x, y } of ownedCells) {
-		// Vérifier les 4 directions adjacentes
 		const directions = [
 			{ x: x - 1, y }, // gauche
 			{ x: x + 1, y }, // droite
@@ -406,8 +407,10 @@ export const getPlayablePositions = (
 		];
 
 		for (const { x: nx, y: ny } of directions) {
-			// Vérifier les limites du board
-			if (nx < 0 || nx >= cols || ny < 0 || ny >= rows) continue;
+			const isOutOfBoundsX = nx < 0 || nx >= cols;
+			const isOutOfBoundsY = ny < 0 || ny >= rows;
+			const isOutOfBounds = isOutOfBoundsX || isOutOfBoundsY;
+			if (isOutOfBounds) continue;
 
 			const positionKey = `${nx}-${ny}`;
 			if (checkedPositions.has(positionKey)) continue;
@@ -416,38 +419,22 @@ export const getPlayablePositions = (
 
 			const cell = board[nx][ny];
 
-			// Si on a un type de bloc spécifique, vérifier les règles spéciales
 			if (blockType) {
 				if (
-					canPlaceBlockOnCell(cell, blockType, currentPlayer, board, nx, ny)
+					canPlaceBlockOnCell(cell, blockType, currentPlayer)
 				) {
-					// Cas spécial : pour les attaques sur une base, toujours permettre
-					if (blockType === "attack" && cell.type === "base") {
+					const isAttackOnBase = blockType === "attack" && cell.type === "base";
+					const hasMultipleBlocks = nbBlocksRemaining && nbBlocksRemaining > 1;
+					if (isAttackOnBase || !hasMultipleBlocks || canPlaceAllBlocksInSequence(
+						board,
+						nx,
+						ny,
+						blockType,
+						currentPlayer,
+						nbBlocksRemaining,
+					)) {
 						positions.push({ x: nx, y: ny });
 					}
-					// Si on a un nombre de blocs restants, vérifier qu'on peut tous les placer
-					else if (nbBlocksRemaining && nbBlocksRemaining > 1) {
-						if (
-							canPlaceAllBlocksInSequence(
-								board,
-								nx,
-								ny,
-								blockType,
-								currentPlayer,
-								nbBlocksRemaining,
-							)
-						) {
-							positions.push({ x: nx, y: ny });
-						}
-					} else {
-						// Sinon, ajouter normalement
-						positions.push({ x: nx, y: ny });
-					}
-				}
-			} else {
-				// Sinon, vérifier seulement si la cellule est libre
-				if (cell.owner === 0) {
-					positions.push({ x: nx, y: ny });
 				}
 			}
 		}
@@ -455,12 +442,14 @@ export const getPlayablePositions = (
 
 	// Pour les attaques, chercher aussi les positions adjacentes aux blocs détruits alignés
 	// Le 1er bloc d'attaque doit être COLLÉ au bloc détruit, à l'opposé du bloc du joueur
-	if (blockType === "attack") {
+	const isAttack = blockType === "attack";
+	if (isAttack) {
 		for (let x = 0; x < cols; x++) {
 			for (let y = 0; y < rows; y++) {
 				const cell = board[x][y];
-				// Si c'est un bloc détruit (owner === -1) avec territory différent du joueur
-				if (cell.owner === -1 && cell.territory !== currentPlayer) {
+				const isDestroyedBlock = cell.owner === -1;
+				const isNotOwnedByCurrentPlayer = cell.territory !== currentPlayer;
+				if (isDestroyedBlock && isNotOwnedByCurrentPlayer) {
 					// Chercher si un bloc du joueur est aligné avec ce bloc détruit
 					// et déterminer la direction du joueur par rapport au bloc détruit
 					const directions = [
@@ -475,55 +464,34 @@ export const getPlayablePositions = (
 						const playerY = y + dy;
 
 						// Vérifier si un bloc du joueur est adjacent dans cette direction
-						if (
-							playerX >= 0 &&
-							playerX < cols &&
-							playerY >= 0 &&
-							playerY < rows
-						) {
+						const isPlayerInBoundsX = playerX >= 0 && playerX < cols;
+						const isPlayerInBoundsY = playerY >= 0 && playerY < rows;
+						const isPlayerInBounds = isPlayerInBoundsX && isPlayerInBoundsY;
+						if (isPlayerInBounds) {
 							const playerCell = board[playerX][playerY];
-							if (playerCell.owner === currentPlayer && playerCell.owner > 0) {
-								// Trouvé ! Le joueur a un bloc de ce côté
+							const isOwnedByCurrentPlayer = playerCell.owner === currentPlayer && playerCell.owner > 0;
+							if (isOwnedByCurrentPlayer) {
 								// On peut maintenant placer un bloc d'attaque de l'autre côté (à l'opposé)
 								const attackX = x + opp.dx;
 								const attackY = y + opp.dy;
-
-								if (
-									attackX >= 0 &&
-									attackX < cols &&
-									attackY >= 0 &&
-									attackY < rows
-								) {
+								const isAttackInBoundsX = attackX >= 0 && attackX < cols;
+								const isAttackInBoundsY = attackY >= 0 && attackY < rows;
+								const isAttackInBounds = isAttackInBoundsX && isAttackInBoundsY;
+								if (isAttackInBounds) {
 									const positionKey = `${attackX}-${attackY}`;
 									if (!checkedPositions.has(positionKey)) {
 										checkedPositions.add(positionKey);
 										const attackCell = board[attackX][attackY];
 
-										// Si c'est une base adverse, on peut toujours l'attaquer
-										if (
-											attackCell.type === "base" &&
-											attackCell.owner > 0 &&
-											attackCell.owner !== currentPlayer
-										) {
-											positions.push({ x: attackX, y: attackY });
-										}
-										// Sinon, vérifier que c'est une cellule LIBRE
-										else if (
-											attackCell.owner === 0 &&
-											canPlaceBlockOnCell(
-												attackCell,
-												blockType,
-												currentPlayer,
-												board,
-												attackX,
-												attackY,
-											)
-										) {
+										const isAttackOnEnemyBase = attackCell.type === "base" && attackCell.owner > 0 && attackCell.owner !== currentPlayer;
+										const isFreeCell = attackCell.owner === 0;
+										const isCellValid = canPlaceBlockOnCell(attackCell, blockType, currentPlayer);
+										if (isAttackOnEnemyBase || (isFreeCell && isCellValid)) {
 											positions.push({ x: attackX, y: attackY });
 										}
 									}
 								}
-								break; // On ne cherche qu'une seule direction alignée
+								break;
 							}
 						}
 					}
@@ -532,8 +500,7 @@ export const getPlayablePositions = (
 		}
 	}
 
-	// Pour les attaques, chercher les chemins de blocs détruits
-	if (blockType === "attack") {
+	if (isAttack) {
 		// Trouver les groupes de blocs détruits connectés aux blocs du joueur
 		const destroyedGroups: Array<Set<string>> = [];
 		const visited = new Set<string>();
@@ -541,8 +508,9 @@ export const getPlayablePositions = (
 		for (let x = 0; x < cols; x++) {
 			for (let y = 0; y < rows; y++) {
 				const cell = board[x][y];
-				if (cell.owner === -1 && !visited.has(`${x}-${y}`)) {
-					// Nouveau groupe de blocs détruits
+				const isDestroyedBlock = cell.owner === -1;
+				const isNotVisited = !visited.has(`${x}-${y}`);
+				if (isDestroyedBlock && isNotVisited) {
 					const group = new Set<string>();
 					const toVisit: Array<{ x: number; y: number }> = [{ x, y }];
 
@@ -565,13 +533,18 @@ export const getPlayablePositions = (
 							{ x: cx, y: cy - 1 },
 							{ x: cx, y: cy + 1 },
 						];
+						
 
 						for (const { x: nx, y: ny } of neighbors) {
-							if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
+							const isNeighborInBoundsX = nx >= 0 && nx < cols;
+							const isNeighborInBoundsY = ny >= 0 && ny < rows;
+							const isNeighborInBounds = isNeighborInBoundsX && isNeighborInBoundsY;
+							if (isNeighborInBounds) {
 								if (!visited.has(`${nx}-${ny}`)) {
 									const nCell = board[nx][ny];
-									// Si c'est un bloc détruit OU un bloc du joueur actuel
-									if (nCell.owner === -1 || nCell.owner === currentPlayer) {
+									const isDestroyedBlock = nCell.owner === -1;
+									const isOwnedByCurrentPlayer = nCell.owner === currentPlayer;
+									if (isDestroyedBlock || isOwnedByCurrentPlayer) {
 										toVisit.push({ x: nx, y: ny });
 									}
 								}
@@ -591,18 +564,20 @@ export const getPlayablePositions = (
 						];
 
 						for (const { x: nx, y: ny } of neighbors) {
-							if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
+							const isNeighborInBoundsX = nx >= 0 && nx < cols;
+							const isNeighborInBoundsY = ny >= 0 && ny < rows;
+							const isNeighborInBounds = isNeighborInBoundsX && isNeighborInBoundsY;
+							if (isNeighborInBounds) {
 								const nCell = board[nx][ny];
-								if (nCell.owner === currentPlayer && nCell.owner > 0) {
+								const isOwnedByCurrentPlayer = nCell.owner === currentPlayer && nCell.owner > 0;
+								if (isOwnedByCurrentPlayer) {
 									touchesPlayer = true;
 									break;
 								}
 							}
 						}
-
 						if (touchesPlayer) break;
 					}
-
 					if (touchesPlayer) {
 						destroyedGroups.push(group);
 					}
@@ -610,7 +585,7 @@ export const getPlayablePositions = (
 			}
 		}
 
-		// Pour chaque groupe de blocs détruits, trouver les positions adjacentes libres
+		// trouver les positions adjacentes libres
 		for (const group of destroyedGroups) {
 			// Déterminer la direction principale du groupe (où est le joueur par rapport au groupe)
 			const playerDirections = new Set<string>();
@@ -625,16 +600,18 @@ export const getPlayablePositions = (
 				];
 
 				for (const { x: nx, y: ny, dir } of neighbors) {
-					if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
+					const isNeighborInBoundsX = nx >= 0 && nx < cols;
+					const isNeighborInBoundsY = ny >= 0 && ny < rows;
+					const isNeighborInBounds = isNeighborInBoundsX && isNeighborInBoundsY;
+					if (isNeighborInBounds) {
 						const nCell = board[nx][ny];
-						if (nCell.owner === currentPlayer && nCell.owner > 0) {
+						const isOwnedByCurrentPlayer = nCell.owner === currentPlayer && nCell.owner > 0;
+						if (isOwnedByCurrentPlayer) {
 							playerDirections.add(dir);
 						}
 					}
 				}
 			}
-
-			// Directions opposées au joueur
 			const oppositeDirs = new Set<string>();
 			for (const dir of playerDirections) {
 				if (dir === "top") oppositeDirs.add("bottom");
@@ -656,14 +633,15 @@ export const getPlayablePositions = (
 				];
 
 				for (const { x: nx, y: ny, dir } of neighbors) {
-					if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
+					const isNeighborInBoundsX = nx >= 0 && nx < cols;
+					const isNeighborInBoundsY = ny >= 0 && ny < rows;
+					const isNeighborInBounds = isNeighborInBoundsX && isNeighborInBoundsY;
+					if (isNeighborInBounds) {
 						const nCell = board[nx][ny];
-						// Si c'est libre ET pas dans le groupe ET dans une direction opposée au joueur
-						if (
-							nCell.owner === 0 &&
-							!group.has(`${nx}-${ny}`) &&
-							oppositeDirs.has(dir)
-						) {
+						const isFreeCell = nCell.owner === 0;
+						const isNotInGroup = !group.has(`${nx}-${ny}`);
+						const isOppositeDirection = oppositeDirs.has(dir);
+						if (isFreeCell && isNotInGroup && isOppositeDirection) {
 							adjacentFreeCells.add(`${nx}-${ny}`);
 						}
 					}
@@ -674,21 +652,18 @@ export const getPlayablePositions = (
 			for (const key of adjacentFreeCells) {
 				const [ax, ay] = key.split("-").map(Number);
 				const positionKey = `${ax}-${ay}`;
-
-				if (!checkedPositions.has(positionKey)) {
+				const isNotChecked = !checkedPositions.has(positionKey);
+				if (isNotChecked) {
 					checkedPositions.add(positionKey);
 					const cell = board[ax][ay];
-
-					if (
-						canPlaceBlockOnCell(cell, blockType, currentPlayer, board, ax, ay)
-					) {
+					const isCellValid = canPlaceBlockOnCell(cell, blockType, currentPlayer);
+					if (isCellValid) {
 						positions.push({ x: ax, y: ay });
 					}
 				}
 			}
 		}
 	}
-
 	return positions;
 };
 
@@ -700,7 +675,7 @@ const canPlaceAllBlocksInSequence = (
 	board: Cell[][],
 	startX: number,
 	startY: number,
-	blockType: "attack" | "defense" | "destroy",
+	blockType: BlockType,
 	currentPlayer: number,
 	nbBlocksRemaining: number,
 ): boolean => {
@@ -721,15 +696,17 @@ const canPlaceAllBlocksInSequence = (
 			const x = startX + dir.dx * i;
 			const y = startY + dir.dy * i;
 
-			// Vérifier si la position est valide
-			if (x < 0 || x >= cols || y < 0 || y >= rows) {
+			const isOutOfBoundsX = x < 0 || x >= cols;
+			const isOutOfBoundsY = y < 0 || y >= rows;
+			const isOutOfBounds = isOutOfBoundsX || isOutOfBoundsY;
+			if (isOutOfBounds) {
 				canPlace = false;
 				break;
 			}
 
 			const cell = board[x][y];
-			// Vérifier si on peut placer le bloc à cette position
-			if (!canPlaceBlockOnCell(cell, blockType, currentPlayer, board, x, y)) {
+			const isCellValid = canPlaceBlockOnCell(cell, blockType, currentPlayer);
+			if (!isCellValid) {
 				canPlace = false;
 				break;
 			}
@@ -755,28 +732,28 @@ export const calculateAllTerritoryCapture = (
 	const rows = board[0]?.length || 0;
 	const cellsToUpdate: Array<{ x: number; y: number; territory: number }> = [];
 
-	// Première passe : identifier quelles colonnes et lignes ont des blocs du joueur
+	// identifie quelles colonnes et lignes ont des blocs du joueur
 	const hasPlayerBlockInCol = new Array(cols).fill(false);
 	const hasPlayerBlockInRow = new Array(rows).fill(false);
 
 	for (let x = 0; x < cols; x++) {
 		for (let y = 0; y < rows; y++) {
-			if (board[x][y].owner === player) {
+			const isOwnedByPlayer = board[x][y].owner === player;
+			if (isOwnedByPlayer) {
 				hasPlayerBlockInCol[x] = true;
 				hasPlayerBlockInRow[y] = true;
 			}
 		}
 	}
 
-	// Deuxième passe : marquer les cellules capturables
+	// marque les cellules capturables
 	for (let x = 0; x < cols; x++) {
 		for (let y = 0; y < rows; y++) {
 			const cell = board[x][y];
 
-			// Une cellule est capturable si :
-			// 1. territory === 0 ET zone === 0
-			// 2. Il y a un bloc du joueur dans SA colonne ET SA ligne
-			if (cell.territory === 0 && cell.zone === 0) {
+			const isTerritoryFree = cell.territory === 0;
+			const isZoneOwnedByPlayer = cell.zone === player;
+			if (isTerritoryFree && isZoneOwnedByPlayer) {
 				if (hasPlayerBlockInCol[x] && hasPlayerBlockInRow[y]) {
 					cellsToUpdate.push({ x, y, territory: player });
 				}
@@ -787,99 +764,3 @@ export const calculateAllTerritoryCapture = (
 	return cellsToUpdate;
 };
 
-/**
- * Calcule quelles cellules doivent être capturées après qu'un joueur place un bloc.
- * Retourne un array de positions avec leur nouveau territoire.
- *
- * Logique :
- * 1. La cellule où le bloc est placé prend automatiquement territory = player
- * 2. Toutes les cellules de la même ligne ET de la même colonne sont vérifiées
- * 3. Une cellule est capturée si :
- *    - territory === 0 ET zone === 0
- *    - Il existe un bloc avec owner === player dans sa colonne (même x)
- *    - Il existe un bloc avec owner === player dans sa ligne (même y)
- */
-export const calculateTerritoryCapture = (
-	board: Cell[][],
-	player: number,
-	placedX: number,
-	placedY: number,
-): Array<{ x: number; y: number; territory: number }> => {
-	const cellsToUpdate: Array<{ x: number; y: number; territory: number }> = [];
-	const cols = board.length;
-	const rows = board[0]?.length || 0;
-
-	// TODO  utile ?
-	// 1. La cellule où le bloc est placé prend automatiquement le territoire
-	const placedCell = board[placedX][placedY];
-	if (placedCell && placedCell.territory === 0 && placedCell.zone === 0) {
-		cellsToUpdate.push({ x: placedX, y: placedY, territory: player });
-	}
-
-	// 2. Vérifier toutes les cellules de la même ligne (col)
-	for (let col = 0; col < cols; col++) {
-		if (col === placedX) continue; // Sauter la cellule déjà traitée
-
-		const cell = board[col][placedY];
-
-		// Vérifier si cette cellule peut être capturée
-		if (cell.territory === 0 && cell.zone === 0) {
-			// Vérifier s'il existe un bloc dans SA colonne (même x) avec owner === player
-			let hasPlayerBlockInColumn = false;
-			for (let row = 0; row < rows; row++) {
-				if (board[col][row].owner === player) {
-					hasPlayerBlockInColumn = true;
-					break;
-				}
-			}
-
-			// Vérifier s'il existe un bloc dans SA ligne (même y) avec owner === player
-			let hasPlayerBlockInRow = false;
-			for (let c = 0; c < cols; c++) {
-				if (board[c][placedY].owner === player) {
-					hasPlayerBlockInRow = true;
-					break;
-				}
-			}
-
-			// Si les deux conditions sont remplies, capturer le territoire
-			if (hasPlayerBlockInColumn && hasPlayerBlockInRow) {
-				cellsToUpdate.push({ x: col, y: placedY, territory: player });
-			}
-		}
-	}
-
-	// 3. Vérifier toutes les cellules de la même colonne (row)
-	for (let row = 0; row < rows; row++) {
-		if (row === placedY) continue; // Sauter la cellule déjà traitée
-
-		const cell = board[placedX][row];
-
-		// Vérifier si cette cellule peut être capturée
-		if (cell.territory === 0 && cell.zone === 0) {
-			// Vérifier s'il existe un bloc dans SA colonne (même x) avec owner === player
-			let hasPlayerBlockInColumn = false;
-			for (let r = 0; r < rows; r++) {
-				if (board[placedX][r].owner === player) {
-					hasPlayerBlockInColumn = true;
-					break;
-				}
-			}
-
-			// Vérifier s'il existe un bloc dans SA ligne (même y) avec owner === player
-			let hasPlayerBlockInRow = false;
-			for (let c = 0; c < cols; c++) {
-				if (board[c][row].owner === player) {
-					hasPlayerBlockInRow = true;
-					break;
-				}
-			}
-
-			// Si les deux conditions sont remplies, capturer le territoire
-			if (hasPlayerBlockInColumn && hasPlayerBlockInRow) {
-				cellsToUpdate.push({ x: placedX, y: row, territory: player });
-			}
-		}
-	}
-	return cellsToUpdate;
-};

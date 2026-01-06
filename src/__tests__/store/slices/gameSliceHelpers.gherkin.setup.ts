@@ -1,5 +1,5 @@
 import { expect } from "vitest";
-import type { Cell } from "../../../data/mapLayout";
+import type { Cell } from "../../../data";
 import type { GameState } from "../../../store/slices/gameSliceHelpers";
 import {
 	calculatePlayablePositions,

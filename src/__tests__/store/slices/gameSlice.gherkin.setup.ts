@@ -1,5 +1,5 @@
 import { expect } from "vitest";
-import type { Cell } from "../../../data/mapLayout";
+import type { Cell } from "../../../data";
 import gameReducer, {
 	completeSequence,
 	incrementBlocksPlaced,
@@ -24,6 +24,14 @@ const createCell = (overrides: Partial<Cell> = {}): Cell => ({
 	zone: 0,
 	hp: 0,
 	...overrides,
+});
+
+const createBridge = (player: number, hp: number): Cell => ({
+	type: "water",
+	owner: player,
+	territory: 0,
+	zone: 0,
+	hp,
 });
 
 const createBoard = (size: number): Cell[][] => {
@@ -129,6 +137,44 @@ export const createGameSliceRunner = () => {
 			"a board of {number} x {number}": (size: number): Cell[][] => {
 				return createBoard(size);
 			},
+			"a bridge of player {number} at position ({number}, {number}) with HP {number}":
+				(
+					player: number,
+					x: number,
+					y: number,
+					hp: number,
+					state: GameState,
+				): GameState => {
+					const newBoard = state.board.map((row, i) =>
+						i === x
+							? row.map((cell, j) =>
+									j === y ? createBridge(player, hp) : cell,
+								)
+							: row,
+					);
+					return { ...state, board: newBoard };
+				},
+			"a land cell at position ({number}, {number}) with owner {number}, territory {number}, zone {number} and HP {number}":
+				(
+					x: number,
+					y: number,
+					owner: number,
+					territory: number,
+					zone: number,
+					hp: number,
+					state: GameState,
+				): GameState => {
+					const newBoard = state.board.map((row, i) =>
+						i === x
+							? row.map((cell, j) =>
+									j === y
+										? createCell({ owner, territory, zone, hp })
+										: cell,
+								)
+							: row,
+					);
+					return { ...state, board: newBoard };
+				},
 			"a base of player {number} at position ({number}, {number}) with HP {number}":
 				(
 					player: number,

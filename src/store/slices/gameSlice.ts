@@ -1,5 +1,7 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
-import { type Cell, trainingMapLayout } from "../../data/mapLayout";
+import type { Cell } from "../../data";
+import type { MapId } from "../../data/maps";
+import { getMapById } from "../../data/maps";
 import type { BlockToPlace } from "../../utils/gameRules";
 import { getPlayablePositions } from "../../utils/gameRules";
 import {
@@ -17,7 +19,7 @@ import {
 } from "./gameSliceHelpers";
 
 const initialState: GameState = {
-	board: trainingMapLayout,
+	board: [],
 	currentPlayer: 1,
 	nbPlayers: 2,
 	diceResult: null,
@@ -33,11 +35,9 @@ const initialState: GameState = {
 	eliminatedPlayers: [],
 	winner: null,
 	isGameOver: false,
+	isMenuVisible: true,
 	baseHpCache: {},
 };
-
-// Initialiser le cache des HP des bases
-initializeBaseHpCache(initialState);
 
 export interface DiceValue {
 	dice1: number;
@@ -49,6 +49,47 @@ const gameSlice = createSlice({
 	name: "game",
 	initialState,
 	reducers: {
+		initGame(
+			state,
+			action: PayloadAction<{ mapId: MapId; nbPlayers: number }>,
+		) {
+			const { mapId, nbPlayers } = action.payload;
+			const board = getMapById(mapId).map((row) => row.map((cell) => ({ ...cell })));
+
+			for (const row of board) {
+				for (const cell of row) {
+					const { type, owner } = cell;
+					const isBase = type === 'base';
+					const isOwnerNotUsed = owner > nbPlayers;
+					if (isBase && isOwnerNotUsed) {
+						cell.owner = -1;
+						cell.hp = 0;
+					}
+				}
+			}
+
+			state.board = board;
+			state.nbPlayers = nbPlayers;
+			state.currentPlayer = 1;
+			state.isMenuVisible = false;
+			state.isGameOver = false;
+			state.winner = null;
+			state.eliminatedPlayers = [];
+			state.diceResult = null;
+			state.diceUsed = [];
+			state.playablePositions = [];
+			state.sequencesToPlace = [];
+			state.currentSequenceIndex = -1;
+			state.blocksPlacedInSequence = 0;
+			state.sequenceStartPosition = null;
+			state.sequenceDirection = null;
+			state.completedSequences = [];
+			state.currentBlockType = null;
+			state.baseHpCache = {};
+
+			// Initialiser le cache des HP des bases
+			initializeBaseHpCache(state);
+		},
 		initBoard(state, action: PayloadAction<Cell[][]>) {
 			state.board = action.payload;
 		},
@@ -59,7 +100,7 @@ const gameSlice = createSlice({
 			state,
 			action: PayloadAction<{ die1: number; die2: number }>,
 		) => {
-			if (state.diceResult !== null || state.diceUsed.length > 0) return;
+			// if (state.diceResult !== null || state.diceUsed.length > 0) return;
 			Object.assign(state, {
 				diceResult: action.payload,
 				...getInitialSequenceState(),
@@ -188,6 +229,7 @@ export const {
 	setDiceUsedValue,
 	updateCell,
 	initBoard,
+	initGame,
 	playablePositions,
 	selectSequence,
 	setSequenceStartPosition,

@@ -2,7 +2,7 @@ import { configureStore } from "@reduxjs/toolkit";
 import { render } from "@testing-library/react";
 import { type ReactNode } from "react";
 import { Provider } from "react-redux";
-import type { Cell } from "../../data/mapLayout";
+import type { Cell } from "../../data";
 import gameReducer from "../../store/slices/gameSlice";
 import type { GameState } from "../../store/slices/gameSliceHelpers";
 

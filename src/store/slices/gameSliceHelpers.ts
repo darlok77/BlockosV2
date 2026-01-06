@@ -1,4 +1,4 @@
-import type { Cell } from "../../data/mapLayout";
+import type { Cell } from "../../data";
 import type { BlockToPlace } from "../../utils/gameRules";
 import {
 	calculateAllTerritoryCapture,
@@ -20,10 +20,11 @@ export interface GameState {
 	sequenceStartPosition: { x: number; y: number } | null;
 	sequenceDirection: { dx: number; dy: number } | null;
 	completedSequences: number[];
-	currentBlockType: "attack" | "defense" | "destroy" | null;
+	currentBlockType: "attack" | "defense" | "destroy" | "bridge" | null;
 	eliminatedPlayers: number[];
 	winner: number | null;
 	isGameOver: boolean;
+	isMenuVisible: boolean;
 	baseHpCache: Record<number, number>; // Cache des HP des bases par joueur
 }
 
@@ -81,6 +82,7 @@ export const captureTerritories = (board: Cell[][], currentPlayer: number) => {
 	const cellsToUpdate = calculateAllTerritoryCapture(board, currentPlayer);
 	cellsToUpdate.forEach(({ x, y, territory }) => {
 		const cell = board[x][y];
+		console.log("cell", x, y);
 		if (cell) cell.territory = territory;
 	});
 	if (cellsToUpdate.length > 0) {

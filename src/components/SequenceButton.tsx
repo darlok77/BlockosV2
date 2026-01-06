@@ -1,4 +1,3 @@
-import React from "react";
 import type { BlockToPlace } from "../utils/gameRules";
 import {
 	formatSequenceText,
@@ -9,20 +8,19 @@ import {
 
 interface SequenceButtonProps {
 	sequence: BlockToPlace;
-	index: number;
 	isSelected: boolean;
 	isCompleted: boolean;
 	isDisabled: boolean;
 	onClick: () => void;
 }
 
-export const SequenceButton: React.FC<SequenceButtonProps> = ({
+export const SequenceButton = ({
 	sequence,
 	isSelected,
 	isCompleted,
 	isDisabled,
 	onClick,
-}) => {
+}: SequenceButtonProps) => {
 	const buttonStyle = getSequenceButtonStyle(
 		isSelected,
 		isCompleted,

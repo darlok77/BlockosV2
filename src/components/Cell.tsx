@@ -1,8 +1,9 @@
 import React, { useCallback, useMemo } from "react";
 import { useDispatch, useSelector } from "react-redux";
 
-import type { Cell as CellType } from "../data/mapLayout";
+import type { Cell as CellType } from "../data";
 import {
+	selectBoard,
 	selectBlocksPlacedInSequence,
 	selectCanPlaceBlock,
 	selectCurrentPlayer,
@@ -28,6 +29,7 @@ export interface CellProps extends CellType {
 export const Cell = React.memo<CellProps>((props: CellProps) => {
 	const { type, owner, x, y, hp } = props;
 	const dispatch = useDispatch();
+	const board = useSelector(selectBoard);
 	const currentPlayer = useSelector(selectCurrentPlayer);
 	const diceUsed = useSelector(selectDiceUsed);
 	const isPlayable = useSelector(selectIsCellPlayable(x, y));
@@ -37,41 +39,48 @@ export const Cell = React.memo<CellProps>((props: CellProps) => {
 	const sequenceStartPosition = useSelector(selectSequenceStartPosition);
 
 	const handleClick = useCallback(() => {
-		console.log("coord", x, y);
-		console.log("hp", hp);
-
+		if (type === "water" && (currentSequence?.type !== "bridge" && currentSequence?.type !== "destroy")) return;
 		if (!diceUsed || diceUsed.length === 0) return;
 		if (!canPlaceBlock) return;
 		if (!currentSequence) return;
 		if (isPlayable) {
 			// Si c'est le premier bloc de la séquence, enregistrer la position de départ
 			const isFirstBlock = blocksPlacedInSequence === 0;
+			const isDestroyBlock = currentSequence.type === "destroy";
+			const isAttackBlock = currentSequence.type === "attack";
+			const isBridgeBlock = currentSequence.type === "bridge";
+			const isBaseBlock = type === "base";
+			const isOwnerEnemy = owner > 0 && owner !== currentPlayer;
 
-			// Si c'est un bloc de type "destroy", infliger des dégâts au bloc adverse
-			if (currentSequence.type === "destroy") {
+			if (isDestroyBlock) {
 				const newHp = (hp || 1) - 1;
-				if (newHp <= 0) {
-					// Si les HP atteignent 0, détruire le bloc (owner devient -1)
-					dispatch(updateCell({ x, y, owner: -1, hp: 0 }));
+				const isDestroyed = newHp <= 0;
+				const isBridge = type === "water" && owner > 0;
+				
+				if (isDestroyed) {
+					// Si c'est un pont (water avec owner), il redevient de l'eau libre
+					if (isBridge) {
+						dispatch(updateCell({ x, y, owner: 0, hp: 0 }));
+					} else {
+						dispatch(updateCell({ x, y, owner: -1, hp: 0 }));
+					}
 				} else {
-					// Sinon, juste réduire les HP sans changer le owner
 					dispatch(updateCell({ x, y, hp: newHp, owner }));
 				}
-				//
 			} else if (
-				currentSequence.type === "attack" &&
-				type === "base" &&
-				owner > 0 &&
-				owner !== currentPlayer
+				isAttackBlock &&
+				isBaseBlock &&
+				isOwnerEnemy
 			) {
 				// Cas exceptionnel pour les attaques de base :
 				// Tous les blocs de la séquence sont placés en un seul clic
 				const damageToInflict =
 					currentSequence.nbBlocks - blocksPlacedInSequence;
 				const newHp = hp - damageToInflict;
+				const isDestroyed = newHp <= 0;
 
 				// Infliger tous les dégâts en une fois
-				if (newHp <= 0) {
+				if (isDestroyed) {
 					dispatch(updateCell({ x, y, owner: -1, hp: 0 }));
 				} else {
 					dispatch(updateCell({ x, y, hp: newHp }));
@@ -86,9 +95,33 @@ export const Cell = React.memo<CellProps>((props: CellProps) => {
 				// Passer immédiatement à la séquence suivante
 				dispatch(completeSequence());
 				return;
+			} else if (isBridgeBlock) {
+				// Pour les ponts, placer sur l'eau avec hp = 4
+				dispatch(updateCell({ x, y, owner: currentPlayer, hp: 4 }));
+		
+				const directions = [
+					{ x: x - 1, y }, // gauche
+					{ x: x + 1, y }, // droite
+					{ x, y: y - 1 }, // haut
+					{ x, y: y + 1 }, // bas
+				];
+				
+				for (const { x: nx, y: ny } of directions) {
+					const isInBoundsX = nx >= 0 && nx < board.length;
+					const isInBoundsY = ny >= 0 && ny < (board[0]?.length || 0);
+					const isInBounds = isInBoundsX && isInBoundsY;
+					if (isInBounds) {
+						const adjacentCell = board[nx][ny];
+						const isLand = adjacentCell.type === 'land';
+						const isNotDestroyed = adjacentCell.owner !== -1;
+						if (isLand && isNotDestroyed) {
+							dispatch(updateCell({ x: nx, y: ny, hp: 4 }));
+						}
+					}
+				}
 			} else {
 				// Pour les autres types de blocs, créer un nouveau bloc
-				dispatch(updateCell({ x, y, owner: currentPlayer, hp: 1 }));
+				dispatch(updateCell({ x, y, owner: currentPlayer, hp }));
 			}
 
 			dispatch(incrementBlocksPlaced());
@@ -101,8 +134,8 @@ export const Cell = React.memo<CellProps>((props: CellProps) => {
 				// Normaliser la direction pour qu'elle reste entre -1 et 1
 				const rawDx = x - sequenceStartPosition.x;
 				const rawDy = y - sequenceStartPosition.y;
-				const dx = rawDx !== 0 ? rawDx / Math.abs(rawDx) : 0;
-				const dy = rawDy !== 0 ? rawDy / Math.abs(rawDy) : 0;
+				const dx = rawDx === 0 ? 0 : rawDx / Math.abs(rawDx);
+				const dy = rawDy === 0 ? 0 : rawDy / Math.abs(rawDy);
 				dispatch(setSequenceDirection({ dx, dy }));
 			}
 
@@ -128,6 +161,7 @@ export const Cell = React.memo<CellProps>((props: CellProps) => {
 		dispatch,
 		currentPlayer,
 		sequenceStartPosition,
+		board,
 	]);
 
 	// Couleurs par joueur
@@ -141,29 +175,61 @@ export const Cell = React.memo<CellProps>((props: CellProps) => {
 		return "#f0f0f0";
 	}, []);
 
+	const getCellBackgroundColor = useCallback(() => {
+		if (type === "water" && owner === 0) return "#4FC3F7";
+		if (hp < 0) return "#ff0000";
+		return getPlayerColor(owner);
+	}, [type, hp, owner, getPlayerColor]);
+
 	const cellStyle = useMemo(
 		() => ({
-			width: 40,
-			height: 40,
+			width: 30,
+			height: 30,
 			border: "1px solid #999",
 			outline: isPlayable && canPlaceBlock ? "3px solid orange" : "none",
-			backgroundColor: hp >= 0 ? getPlayerColor(owner) : "#ff0000",
+			backgroundColor: getCellBackgroundColor(),
 			display: "flex",
 			alignItems: "center",
 			justifyContent: "center",
 			cursor: isPlayable && canPlaceBlock ? "pointer" : "not-allowed",
 			opacity: isPlayable && !canPlaceBlock ? 0.5 : 1,
+			padding: 0,
+			margin: 0,
 		}),
-		[isPlayable, canPlaceBlock, owner, hp, getPlayerColor],
+		[isPlayable, canPlaceBlock, getCellBackgroundColor],
 	);
 
 	const cellContent = useMemo(() => {
-		return type === "base" ? `B${owner}` : "";
+		if (type === "base") return `B${owner}`;
+		if (type === "water" && owner !== 0) return 'P';
+		return "";
 	}, [type, owner]);
 
+	const isDisabled =
+		!isPlayable ||
+		!canPlaceBlock ||
+		!diceUsed ||
+		diceUsed.length === 0 ||
+		!currentSequence;
+	
+	let ariaLabel = "";
+	if (type === "base") {
+		ariaLabel = `Base du joueur ${owner} à la position (${x}, ${y})`;
+	} else if (type === "water") {
+		ariaLabel = `Eau à la position (${x}, ${y})`;
+	} else {
+		ariaLabel = `Cellule à la position (${x}, ${y})`;
+	}
+
 	return (
-		<div onClick={handleClick} style={cellStyle}>
+		<button
+			type="button"
+			onClick={handleClick}
+			style={cellStyle}
+			disabled={isDisabled}
+			aria-label={ariaLabel}
+		>
 			{cellContent}
-		</div>
+		</button>
 	);
 });

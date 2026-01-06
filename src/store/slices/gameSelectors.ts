@@ -1,5 +1,5 @@
 import { createSelector } from "@reduxjs/toolkit";
-import type { Cell } from "../../data/mapLayout";
+import type { Cell } from "../../data";
 import { calculateBlocksToPlace } from "../../utils/gameRules";
 import type { RootState } from "../index";
 
@@ -10,6 +10,12 @@ const selectGameState = (state: RootState) => state.game;
 export const selectBoard = createSelector(
 	[selectGameState],
 	(state) => state.board,
+);
+
+// Sélecteur pour vérifier si le menu est visible
+export const selectIsMenuVisible = createSelector(
+	[selectGameState],
+	(state) => state.isMenuVisible,
 );
 
 // Sélecteur pour récupérer le joueur courant

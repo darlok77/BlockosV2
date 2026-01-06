@@ -1,29 +1,31 @@
-import React from "react";
 import { useSelector } from "react-redux";
 import { selectBoard } from "../store/slices/gameSelectors";
 import { Cell } from "./Cell";
 
-export const GameBoard: React.FC = () => {
+export const GameBoard = () => {
 	const board = useSelector(selectBoard);
 
 	return (
-		<div style={{ display: "inline-block" }}>
-			{board.map((row, x) => (
-				<div key={x} style={{ display: "flex" }}>
-					{row.map((cell, y) => (
-						<Cell
-							key={`${x}/${y}`}
-							type={cell.type}
-							owner={cell.owner}
-							territory={cell.territory}
-							zone={cell.zone}
-							hp={cell.hp}
-							x={x}
-							y={y}
-						/>
-					))}
-				</div>
-			))}
-		</div>
+		<table style={{ borderCollapse: "collapse", display: "inline-block" }}>
+			<tbody>
+				{board.map((row, x) => (
+					<tr key={`row-${x}`}>
+						{row.map((cell, y) => (
+							<td key={`cell-${x}/${y}`} style={{ padding: 0 }}>
+								<Cell
+									type={cell.type}
+									owner={cell.owner}
+									territory={cell.territory}
+									zone={cell.zone}
+									hp={cell.hp}
+									x={x}
+									y={y}
+								/>
+							</td>
+						))}
+					</tr>
+				))}
+			</tbody>
+		</table>
 	);
 };

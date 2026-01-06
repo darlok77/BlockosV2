@@ -1,8 +1,7 @@
 import { expect } from "vitest";
-import type { Cell } from "../../data/mapLayout";
+import type { Cell } from "../../data";
 import {
 	calculateAllTerritoryCapture,
-	calculateTerritoryCapture,
 	getAlignedPositions,
 	getNextPositionInDirection,
 	getPlayablePositions,
@@ -99,6 +98,49 @@ export const createGameRulesRunner = () => {
 				state.board[x][y].zone = player;
 				return state;
 			},
+			"a water cell at position ({number}, {number}) with territory {number} and zone {number}": (
+				x: number,
+				y: number,
+				territory: number,
+				zone: number,
+				state: GameState,
+			): GameState => {
+				state.board[x][y].type = "water";
+				state.board[x][y].owner = 0;
+				state.board[x][y].territory = territory;
+				state.board[x][y].zone = zone;
+				return state;
+			},
+			"a bridge of player {number} at position ({number}, {number}) with HP {number}": (
+				player: number,
+				x: number,
+				y: number,
+				hp: number,
+				state: GameState,
+			): GameState => {
+				state.board[x][y].type = "water";
+				state.board[x][y].owner = player;
+				state.board[x][y].territory = 0;
+				state.board[x][y].zone = 0;
+				state.board[x][y].hp = hp;
+				return state;
+			},
+			"a land cell at position ({number}, {number}) with owner {number}, territory {number}, zone {number} and HP {number}": (
+				x: number,
+				y: number,
+				owner: number,
+				territory: number,
+				zone: number,
+				hp: number,
+				state: GameState,
+			): GameState => {
+				state.board[x][y].type = "land";
+				state.board[x][y].owner = owner;
+				state.board[x][y].territory = territory;
+				state.board[x][y].zone = zone;
+				state.board[x][y].hp = hp;
+				return state;
+			},
 		},
 		when: {
 			"I search for aligned positions from ({number}, {number})": (
@@ -149,14 +191,6 @@ export const createGameRulesRunner = () => {
 					nbBlocksRemaining,
 				);
 			},
-			"I calculate territory capture after placement at ({number}, {number})": (
-				x: number,
-				y: number,
-				player: number,
-				state: GameState,
-			): Array<{ x: number; y: number; territory: number }> => {
-				return calculateTerritoryCapture(state.board, player, x, y);
-			},
 			"I calculate all territory captures": (
 				player: number,
 				state: GameState,
@@ -178,6 +212,13 @@ export const createGameRulesRunner = () => {
 				captures: Array<{ x: number; y: number; territory: number }>,
 			): void => {
 				expect(captures.some((c) => c.x === x && c.y === y)).toBe(true);
+			},
+			"I should not find position ({number}, {number}) in captures": (
+				x: number,
+				y: number,
+				captures: Array<{ x: number; y: number; territory: number }>,
+			): void => {
+				expect(captures.some((c) => c.x === x && c.y === y)).toBe(false);
 			},
 			"I should have at least {number} position(s)": (
 				minCount: number,

@@ -1,15 +1,13 @@
-import React from "react";
-
 interface ProgressionDisplayProps {
 	currentBlocks: number;
 	totalBlocks: number;
 }
 
-export const ProgressionDisplay: React.FC<ProgressionDisplayProps> = ({
+export const ProgressionDisplay = ({
 	currentBlocks,
 	totalBlocks,
-}) => {
-	const style: React.CSSProperties = {
+}: ProgressionDisplayProps) => {
+	const style = {
 		marginTop: 10,
 		paddingTop: 10,
 		borderTop: "1px solid #999",

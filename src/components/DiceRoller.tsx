@@ -15,7 +15,7 @@ import {
 	setDiceResult,
 	setDiceUsedValue,
 } from "../store/slices/gameSlice";
-import { calculateBlocksToPlace } from "../utils/gameRules";
+import { type BlockType, calculateBlocksToPlace } from "../utils/gameRules";
 import {
 	isSequenceCompleted,
 	isSequenceDisabled,
@@ -34,7 +34,7 @@ export const DiceRoller = () => {
 	const DICE_FACES = 6;
 
 	const rollDice = () => {
-		if (diceResult || sequencesToPlace.length > 0) return;
+		// if (diceResult || sequencesToPlace.length > 0) return;
 		const die1 = Math.floor(Math.random() * DICE_FACES) + 1;
 		const die2 = Math.floor(Math.random() * DICE_FACES) + 1;
 		dispatch(setDiceResult({ die1, die2 }));
@@ -52,6 +52,13 @@ export const DiceRoller = () => {
 		}
 
 		const sequences = calculateBlocksToPlace(diceValues);
+		
+		// Si la somme des dés est 10, 11 ou 12, ajouter une séquence de pont
+		const sum = diceResult.die1 + diceResult.die2;
+		if (sum === 10 || sum === 11 || sum === 12) {
+			// Ajouter la séquence de pont à la fin de la liste
+			sequences.push({ type: "bridge", nbBlocks: 1 }); // Séquence de pont (1 bloc)
+		}
 
 		dispatch(setDiceUsedValue({ diceValues, sequences }));
 		dispatch(playablePositions());
@@ -68,6 +75,22 @@ export const DiceRoller = () => {
 		if (player === 3) return "#FFEB3B"; // Jaune
 		if (player === 4) return "#4CAF50"; // Vert
 		return "#999";
+	};
+
+	const getSequenceTextColor = (type: BlockType) => {
+		if (type === "attack") return "#d32f2f";
+		if (type === "defense") return "#1976d2";
+		if (type === "bridge") return "#0288d1";
+		return "#9e9e9e";
+	};
+
+	const getSequenceBackgroundColor = (
+		isCompleted: boolean,
+		isSelected: boolean,
+	) => {
+		if (isCompleted) return "#c8e6c9";
+		if (isSelected) return "#fff9c4";
+		return "#fff";
 	};
 
 	return (
@@ -103,11 +126,11 @@ export const DiceRoller = () => {
 			</div>
 			<button
 				onClick={rollDice}
-				disabled={!!diceResult || sequencesToPlace.length > 0}
+				// disabled={!!diceResult || sequencesToPlace.length > 0}
 				style={{
 					width: "100%",
 					padding: 10,
-					opacity: !!diceResult || sequencesToPlace.length > 0 ? 0.6 : 1,
+					//opacity: !!diceResult || sequencesToPlace.length > 0 ? 0.6 : 1,
 				}}
 			>
 				Lancer les dés
@@ -140,6 +163,21 @@ export const DiceRoller = () => {
 								Utiliser la somme {diceResult.die1 + diceResult.die2}
 							</button>
 						)}
+						{(diceResult.die1 + diceResult.die2 === 10 || 
+						  diceResult.die1 + diceResult.die2 === 11 || 
+						  diceResult.die1 + diceResult.die2 === 12) && (
+							<button
+								onClick={() => handleChoose(true)}
+								disabled={sequencesToPlace.length > 0}
+								style={{
+									marginLeft: 5,
+									opacity: sequencesToPlace.length > 0 ? 0.6 : 1,
+									backgroundColor: sequencesToPlace.length > 0 ? undefined : "#e3f2fd",
+								}}
+							>
+								🌉 Construire un pont
+							</button>
+						)}
 					</div>
 				</div>
 			)}
@@ -169,7 +207,7 @@ export const DiceRoller = () => {
 
 						return (
 							<button
-								key={index}
+								key={`sequence-${index}`}
 								onClick={() => handleSelectSequence(index)}
 								disabled={isDisabled}
 								style={{
@@ -178,11 +216,10 @@ export const DiceRoller = () => {
 									padding: 8,
 									border: "1px solid #999",
 									borderRadius: 4,
-									backgroundColor: isCompleted
-										? "#c8e6c9"
-										: isSelected
-											? "#fff9c4"
-											: "#fff",
+									backgroundColor: getSequenceBackgroundColor(
+										isCompleted,
+										isSelected,
+									),
 									cursor: isDisabled ? "not-allowed" : "pointer",
 									opacity: isDisabled ? 0.5 : 1,
 									display: "flex",
@@ -194,23 +231,20 @@ export const DiceRoller = () => {
 									{sequence.type === "attack" && "⚔️"}
 									{sequence.type === "defense" && "🛡️"}
 									{sequence.type === "destroy" && "💥"}
+									{sequence.type === "bridge" && "🌉"}
 								</span>
 								<span
 									style={{
 										flex: 1,
 										textAlign: "left",
-										color:
-											sequence.type === "attack"
-												? "#d32f2f"
-												: sequence.type === "defense"
-													? "#1976d2"
-													: "#9e9e9e",
+										color: getSequenceTextColor(sequence.type),
 									}}
 								>
 									{sequence.nbBlocks} bloc{sequence.nbBlocks > 1 ? "s" : ""}{" "}
 									{sequence.type === "attack" && "d'attaque"}
 									{sequence.type === "defense" && "de défense"}
 									{sequence.type === "destroy" && "de destruction"}
+									{sequence.type === "bridge" && "de pont"}
 								</span>
 							</button>
 						);

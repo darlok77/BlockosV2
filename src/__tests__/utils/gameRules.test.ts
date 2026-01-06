@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Cell } from "../../data/mapLayout";
+import type { Cell } from "../../data";
 import {
 	calculateBlocksToPlace,
 	calculateBlocksToPlaceSequentially,
@@ -214,6 +214,80 @@ describe("gameRules", () => {
 					zone: 2,
 				});
 				expect(canPlaceBlockOnCell(cell, "destroy", 1)).toBe(false);
+			});
+
+			it("should allow destruction on enemy bridge (water with owner)", () => {
+				const cell = createCell({
+					type: "water",
+					owner: 2,
+					territory: 0,
+					zone: 0,
+				});
+				expect(canPlaceBlockOnCell(cell, "destroy", 1)).toBe(true);
+			});
+
+			it("should not allow destruction on free water cell", () => {
+				const cell = createCell({
+					type: "water",
+					owner: 0,
+					territory: 0,
+					zone: 0,
+				});
+				expect(canPlaceBlockOnCell(cell, "destroy", 1)).toBe(false);
+			});
+		});
+
+		describe("bridge", () => {
+			it("should allow bridge placement on free water cell", () => {
+				const cell = createCell({
+					type: "water",
+					owner: 0,
+					territory: 0,
+					zone: 0,
+				});
+				expect(canPlaceBlockOnCell(cell, "bridge", 1)).toBe(true);
+			});
+
+			it("should not allow bridge placement on water cell with owner", () => {
+				const cell = createCell({
+					type: "water",
+					owner: 2,
+					territory: 0,
+					zone: 0,
+				});
+				expect(canPlaceBlockOnCell(cell, "bridge", 1)).toBe(false);
+			});
+
+			it("should not allow bridge placement on land cell", () => {
+				const cell = createCell({
+					type: "land",
+					owner: 0,
+					territory: 0,
+					zone: 0,
+				});
+				expect(canPlaceBlockOnCell(cell, "bridge", 1)).toBe(false);
+			});
+		});
+
+		describe("water cells", () => {
+			it("should not allow attack on water cell", () => {
+				const cell = createCell({
+					type: "water",
+					owner: 0,
+					territory: 0,
+					zone: 0,
+				});
+				expect(canPlaceBlockOnCell(cell, "attack", 1)).toBe(false);
+			});
+
+			it("should not allow defense on water cell", () => {
+				const cell = createCell({
+					type: "water",
+					owner: 0,
+					territory: 0,
+					zone: 0,
+				});
+				expect(canPlaceBlockOnCell(cell, "defense", 1)).toBe(false);
 			});
 		});
 	});
@@ -633,179 +707,6 @@ describe("gameRules", () => {
 		});
 	});
 
-	describe("calculateTerritoryCapture", () => {
-		const game = createGameRulesRunner();
-
-		it("should capture territory horizontally", () => {
-			const state = game.given("a board of {number} x {number}", 5);
-			game.given(
-				"a block of player {number} at position ({number}, {number})",
-				1,
-				0,
-				2,
-				state,
-			);
-			game.given(
-				"a block of player {number} at position ({number}, {number})",
-				1,
-				2,
-				0,
-				state,
-			);
-
-			const captures = game.when(
-				"I calculate territory capture after placement at ({number}, {number})",
-				2,
-				2,
-				1,
-				state,
-			);
-
-			game.then("I should have at least {number} capture(s)", 1, captures);
-		});
-
-		it("should capture territory vertically", () => {
-			const state = game.given("a board of {number} x {number}", 5);
-			game.given(
-				"a block of player {number} at position ({number}, {number})",
-				1,
-				2,
-				0,
-				state,
-			);
-			game.given(
-				"a block of player {number} at position ({number}, {number})",
-				1,
-				0,
-				1,
-				state,
-			);
-
-			const captures = game.when(
-				"I calculate territory capture after placement at ({number}, {number})",
-				2,
-				2,
-				1,
-				state,
-			);
-
-			game.then("I should have at least {number} capture(s)", 1, captures);
-		});
-
-		it("should capture territory in cross pattern (horizontal + vertical)", () => {
-			const state = game.given("a board of {number} x {number}", 5);
-			game.given(
-				"a block of player {number} at position ({number}, {number})",
-				1,
-				0,
-				2,
-				state,
-			);
-			game.given(
-				"a block of player {number} at position ({number}, {number})",
-				1,
-				2,
-				0,
-				state,
-			);
-			game.given(
-				"a block of player {number} at position ({number}, {number})",
-				1,
-				0,
-				1,
-				state,
-			);
-
-			const captures = game.when(
-				"I calculate territory capture after placement at ({number}, {number})",
-				2,
-				2,
-				1,
-				state,
-			);
-
-			game.then("I should have at least {number} capture(s)", 1, captures);
-		});
-
-		it("should not capture cells already in a territory", () => {
-			const state = game.given("a board of {number} x {number}", 5);
-			game.given(
-				"a block of player {number} at position ({number}, {number})",
-				1,
-				2,
-				2,
-				state,
-			);
-			game.given(
-				"a block of player {number} at position ({number}, {number})",
-				1,
-				0,
-				2,
-				state,
-			);
-			game.given(
-				"a cell at position ({number}, {number}) in player {number} territory",
-				1,
-				2,
-				2,
-				state,
-			);
-
-			const captures = game.when(
-				"I calculate territory capture after placement at ({number}, {number})",
-				2,
-				2,
-				1,
-				state,
-			);
-
-			game.then(
-				"I should have all captures with territory {number}",
-				1,
-				captures,
-			);
-		});
-
-		it("should not capture cells in a zone", () => {
-			const state = game.given("a board of {number} x {number}", 5);
-			game.given(
-				"a block of player {number} at position ({number}, {number})",
-				1,
-				2,
-				2,
-				state,
-			);
-			game.given(
-				"a block of player {number} at position ({number}, {number})",
-				1,
-				0,
-				2,
-				state,
-			);
-			game.given(
-				"a cell at position ({number}, {number}) in player {number} zone",
-				1,
-				2,
-				2,
-				state,
-			);
-
-			const captures = game.when(
-				"I calculate territory capture after placement at ({number}, {number})",
-				2,
-				2,
-				1,
-				state,
-			);
-
-			game.then(
-				"I should have all captures with territory {number}",
-				1,
-				captures,
-			);
-		});
-	});
-
 	describe("calculateAllTerritoryCapture", () => {
 		const game = createGameRulesRunner();
 
@@ -943,6 +844,174 @@ describe("gameRules", () => {
 				1,
 				captures,
 			);
+		});
+
+		it("should not capture water cells", () => {
+			const state = game.given("a board of {number} x {number}", 5);
+			game.given(
+				"a block of player {number} at position ({number}, {number})",
+				1,
+				1,
+				1,
+				state,
+			);
+			game.given(
+				"a block of player {number} at position ({number}, {number})",
+				1,
+				1,
+				2,
+				state,
+			);
+			game.given(
+				"a block of player {number} at position ({number}, {number})",
+				1,
+				2,
+				1,
+				state,
+			);
+			game.given(
+				"a water cell at position ({number}, {number}) with territory {number} and zone {number}",
+				2,
+				2,
+				0,
+				0,
+				state,
+			);
+
+			const captures = game.when(
+				"I calculate all territory captures",
+				1,
+				state,
+			);
+
+			// Water cell at (2,2) should not be captured even though it's at intersection
+			game.then(
+				"I should not find position ({number}, {number}) in captures",
+				2,
+				2,
+				captures,
+			);
+		});
+	});
+
+	describe("bridge destruction", () => {
+		const game = createGameRulesRunner();
+
+		it("should allow destruction on enemy bridge with 4 HP", () => {
+			const state = game.given("a board of {number} x {number}", 5);
+			game.given(
+				"a bridge of player {number} at position ({number}, {number}) with HP {number}",
+				2,
+				2,
+				2,
+				4,
+				state,
+			);
+
+			const positions = game.when(
+				"I search for playable positions",
+				"destroy",
+				1,
+				undefined,
+				state,
+			);
+
+			game.then("I should find position ({number}, {number})", 2, 2, positions);
+		});
+
+		it("should allow destruction on enemy bridge with 1 HP (after damage)", () => {
+			const state = game.given("a board of {number} x {number}", 5);
+			game.given(
+				"a bridge of player {number} at position ({number}, {number}) with HP {number}",
+				2,
+				2,
+				2,
+				1,
+				state,
+			);
+
+			const positions = game.when(
+				"I search for playable positions",
+				"destroy",
+				1,
+				undefined,
+				state,
+			);
+
+			game.then("I should find position ({number}, {number})", 2, 2, positions);
+		});
+
+		it("should allow destruction on land cell with 4 HP (bridge extremity)", () => {
+			const state = game.given("a board of {number} x {number}", 5);
+			game.given(
+				"a land cell at position ({number}, {number}) with owner {number}, territory {number}, zone {number} and HP {number}",
+				2,
+				2,
+				2,
+				2,
+				0,
+				4,
+				state,
+			);
+
+			const positions = game.when(
+				"I search for playable positions",
+				"destroy",
+				1,
+				undefined,
+				state,
+			);
+
+			game.then("I should find position ({number}, {number})", 2, 2, positions);
+		});
+
+		it("should allow destruction on enemy land cell with 4 HP in enemy territory", () => {
+			const state = game.given("a board of {number} x {number}", 5);
+			game.given(
+				"a land cell at position ({number}, {number}) with owner {number}, territory {number}, zone {number} and HP {number}",
+				2,
+				2,
+				2,
+				2,
+				2,
+				4,
+				state,
+			);
+
+			const positions = game.when(
+				"I search for playable positions",
+				"destroy",
+				1,
+				undefined,
+				state,
+			);
+
+			game.then("I should find position ({number}, {number})", 2, 2, positions);
+		});
+
+		it("should not allow destruction on free land cell with 4 HP (bridge extremity without owner)", () => {
+			const state = game.given("a board of {number} x {number}", 5);
+			game.given(
+				"a land cell at position ({number}, {number}) with owner {number}, territory {number}, zone {number} and HP {number}",
+				2,
+				2,
+				0,
+				0,
+				0,
+				4,
+				state,
+			);
+
+			const positions = game.when(
+				"I search for playable positions",
+				"destroy",
+				1,
+				undefined,
+				state,
+			);
+
+			// Free cells cannot be destroyed
+			expect(positions.some((p) => p.x === 2 && p.y === 2)).toBe(false);
 		});
 	});
 });

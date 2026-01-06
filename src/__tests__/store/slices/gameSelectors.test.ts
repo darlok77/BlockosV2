@@ -1,6 +1,6 @@
 import { faker } from "@faker-js/faker";
 import { describe, expect, it } from "vitest";
-import type { Cell } from "../../../data/mapLayout";
+import type { Cell } from "../../../data";
 import type { RootState } from "../../../store/index";
 import {
 	selectBlocksToPlace,

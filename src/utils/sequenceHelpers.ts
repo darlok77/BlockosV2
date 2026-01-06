@@ -73,6 +73,8 @@ export const getSequenceIcon = (type: BlockToPlace["type"]): string => {
 			return "🛡️";
 		case "destroy":
 			return "💥";
+		case "bridge":
+			return "🌉";
 		default:
 			exhaustiveCheck(type);
 	}
@@ -89,6 +91,8 @@ export const getSequenceLabel = (type: BlockToPlace["type"]): string => {
 			return "de défense";
 		case "destroy":
 			return "de destruction";
+		case "bridge":
+			return "de pont";
 		default:
 			exhaustiveCheck(type);
 	}
@@ -105,6 +109,8 @@ export const getSequenceColor = (type: BlockToPlace["type"]): string => {
 			return "#1976d2";
 		case "destroy":
 			return "#9e9e9e";
+		case "bridge":
+			return "#0288d1";
 		default:
 			exhaustiveCheck(type);
 	}

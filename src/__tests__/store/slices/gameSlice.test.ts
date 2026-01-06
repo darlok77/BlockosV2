@@ -497,4 +497,150 @@ describe("gameSlice", () => {
 			game.then("current player should be {number}", 3, newState);
 		});
 	});
+
+	describe("bridge destruction", () => {
+		const game = createGameSliceRunner();
+
+		it("should reduce bridge HP from 4 to 3 when destroyed", () => {
+			let state = game.given(
+				"a game state with board size {number} x {number}",
+				5,
+			);
+			state = game.given(
+				"a bridge of player {number} at position ({number}, {number}) with HP {number}",
+				2,
+				2,
+				2,
+				4,
+				state,
+			);
+			state = game.given("dice result is {number} and {number}", 1, 0, state);
+			state = game.given(
+				"dice used values {array} with sequences",
+				[1],
+				[{ type: "destroy", nbBlocks: 1 }],
+				state,
+			);
+			state = game.given("sequence {number} is selected", 0, state);
+
+			const newState = game.when(
+				"I dispatch updateCell at ({number}, {number}) with",
+				2,
+				2,
+				{ hp: 3, owner: 2 },
+				state,
+			);
+
+			game.then("cell at ({number}, {number}) should have HP {number}", 2, 2, 3, newState);
+			game.then("cell at ({number}, {number}) should have owner {number}", 2, 2, 2, newState);
+		});
+
+		it("should destroy bridge when HP reaches 0 (from 1 HP)", () => {
+			let state = game.given(
+				"a game state with board size {number} x {number}",
+				5,
+			);
+			state = game.given(
+				"a bridge of player {number} at position ({number}, {number}) with HP {number}",
+				2,
+				2,
+				2,
+				1,
+				state,
+			);
+			state = game.given("dice result is {number} and {number}", 1, 0, state);
+			state = game.given(
+				"dice used values {array} with sequences",
+				[1],
+				[{ type: "destroy", nbBlocks: 1 }],
+				state,
+			);
+			state = game.given("sequence {number} is selected", 0, state);
+
+			// When bridge is destroyed, it should become free water (owner: 0)
+			const newState = game.when(
+				"I dispatch updateCell at ({number}, {number}) with",
+				2,
+				2,
+				{ hp: 0, owner: 0 },
+				state,
+			);
+
+			game.then("cell at ({number}, {number}) should have HP {number}", 2, 2, 0, newState);
+			game.then("cell at ({number}, {number}) should have owner {number}", 2, 2, 0, newState);
+		});
+
+		it("should reduce bridge extremity HP from 4 to 3 when destroyed", () => {
+			let state = game.given(
+				"a game state with board size {number} x {number}",
+				5,
+			);
+			state = game.given(
+				"a land cell at position ({number}, {number}) with owner {number}, territory {number}, zone {number} and HP {number}",
+				2,
+				2,
+				2,
+				2,
+				0,
+				4,
+				state,
+			);
+			state = game.given("dice result is {number} and {number}", 1, 0, state);
+			state = game.given(
+				"dice used values {array} with sequences",
+				[1],
+				[{ type: "destroy", nbBlocks: 1 }],
+				state,
+			);
+			state = game.given("sequence {number} is selected", 0, state);
+
+			const newState = game.when(
+				"I dispatch updateCell at ({number}, {number}) with",
+				2,
+				2,
+				{ hp: 3, owner: 2 },
+				state,
+			);
+
+			game.then("cell at ({number}, {number}) should have HP {number}", 2, 2, 3, newState);
+			game.then("cell at ({number}, {number}) should have owner {number}", 2, 2, 2, newState);
+		});
+
+		it("should destroy bridge extremity when HP reaches 0 (from 1 HP)", () => {
+			let state = game.given(
+				"a game state with board size {number} x {number}",
+				5,
+			);
+			state = game.given(
+				"a land cell at position ({number}, {number}) with owner {number}, territory {number}, zone {number} and HP {number}",
+				2,
+				2,
+				2,
+				2,
+				0,
+				1,
+				state,
+			);
+			state = game.given("dice result is {number} and {number}", 1, 0, state);
+			state = game.given(
+				"dice used values {array} with sequences",
+				[1],
+				[{ type: "destroy", nbBlocks: 1 }],
+				state,
+			);
+			state = game.given("sequence {number} is selected", 0, state);
+
+			// When extremity is destroyed, it should become destroyed block (owner: -1)
+			const newState = game.when(
+				"I dispatch updateCell at ({number}, {number}) with",
+				2,
+				2,
+				{ hp: 0, owner: -1 },
+				state,
+			);
+
+			game.then("cell at ({number}, {number}) should have HP {number}", 2, 2, 0, newState);
+			game.then("cell at ({number}, {number}) should have owner {number}", 2, 2, -1, newState);
+		});
+	});
 });
